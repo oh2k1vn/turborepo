@@ -12,6 +12,7 @@
       ]
     },
     "lint": {
+      "dependsOn": [],
       "outputs": []
     },
     "check-types": {

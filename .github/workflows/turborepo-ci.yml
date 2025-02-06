@@ -55,8 +55,8 @@ jobs:
       - name: Run lint
         run: yarn turbo run lint
 
-      - name: Run format check
-        run: yarn turbo run format
+      - name: Run Prettier
+        run: yarn prettier --check
 
   build:
     name: Build applications
