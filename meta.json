@@ -1,0 +1,7 @@
+{
+  "name": "cyber-store-app",
+  "description": "",
+  "template": "https://vercel.com/templates/remix/turborepo-kitchensink",
+  "featured": true,
+  "maintainedByCoreTeam": true
+}

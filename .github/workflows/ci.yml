@@ -1,0 +1,133 @@
+name: CI Test
+
+on:
+  push:
+    branches: 
+      - dev
+  pull_request:
+    branches: 
+      - dev
+
+jobs:
+  # 🛠️ Job 1: Build & Upload Artifact
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+    timeout-minutes: 10
+    steps:
+      # 1️⃣ Lấy code từ repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Cài đặt Node.js & Cache
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      # 3️⃣ Cài đặt dependencies
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # 4️⃣ Chạy Unit Test + Coverage
+      - name: Run Tests
+        run: yarn test
+
+      # 5️⃣ Upload Coverage Artifact
+      - name: Upload Test Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: coverage/
+
+  # 🚀 Job 2: Download Artifact       
+  build:
+    needs: test # ✅ Chỉ chạy build nếu test PASSED
+    name: Build
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Lấy code từ repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Thiết lập cache để tăng tốc build
+      - name: Setup Cache for Turbo & Node.js
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            **/node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      # 3️⃣ Ghi log thời gian bắt đầu
+      - name: Log Start Time
+        run: echo "Workflow started at $(date)"
+
+      # 4️⃣ Cài đặt Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      # 5️⃣ Cài đặt dependencies
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # 6️⃣ Chạy build & đo thời gian chạy
+      - name: Build Application
+        run: |
+          START_TIME=$(date +%s)
+          yarn turbo run build --affected --cache-dir=.turbo
+          END_TIME=$(date +%s)
+          echo "Build completed in $((END_TIME - START_TIME)) seconds"
+
+      # 7️⃣ Lưu trữ artifact để dùng trong các workflow khác
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: apps/
+
+      # 8️⃣ Cài đặt Cosign để ký artifact
+      # - name: Install Cosign
+      #   uses: sigstore/cosign-installer@v3
+
+      # 9️⃣ Ký và tạo attestation cho artifact
+      # - name: Generate Attestation
+      #   run: |
+      #     echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+      #     cosign sign-blob --key cosign.key --output-signature build.sig apps/
+      #   env:
+      #     COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+
+      # 🔟 Ghi log tổng thời gian chạy
+      - name: Log End Time
+        run: echo "Workflow completed at $(date)"
+
+      # 🔴 Cleanup (luôn chạy để dọn dẹp)
+      - name: Cleanup Old Caches
+        if: always()
+        run: rm -rf .turbo
+
+  # 🚀 Job 3: Deploy lên Verce      
+  deploy:
+      needs: build # Chỉ chạy khi build xong
+      runs-on: ubuntu-latest
+      steps:
+        - name: Download Build Artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: build-artifact
+            path: .next/
+
+        - name: Install Vercel CLI
+          run: npm install -g vercel
+
+        - name: Deploy to Vercel
+          run: vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --confirm
